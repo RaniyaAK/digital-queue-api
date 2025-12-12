@@ -194,7 +194,6 @@ def call_next(request):
     })
 
 
-# Skip Token
 @api_view(['POST'])
 def skip_token(request, token_id):
     try:
@@ -204,12 +203,20 @@ def skip_token(request, token_id):
 
     token.status = "SKIPPED"
     token.save()
-    return Response({"message": "Token skipped"})
 
-# Complete Token (using queue_id instead of token_id)
+    # Serialize and hide status
+    token_data = TokenSerializer(token).data
+    token_data.pop('status', None)
+    token_data.pop('called_at', None)
+
+    return Response({
+        "message": "Token skipped",
+        "token": token_data
+    })
+
+
 @api_view(['POST'])
 def complete_token(request, queue_id):
-    # Find the token currently being served in this queue
     token = Token.objects.filter(queue_id=queue_id, status="SERVING").first()
 
     if not token:
@@ -224,7 +231,13 @@ def complete_token(request, queue_id):
         counter.is_busy = False
         counter.save()
 
-    return Response({"message": "Token completed", "token_id": token.id})
+    token_data = TokenSerializer(token).data
+    token_data.pop('status', None)
+
+    return Response({
+        "message": "Token completed",
+        "token": token_data  
+    })
 
 
 @api_view(['GET'])

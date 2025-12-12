@@ -21,6 +21,10 @@ urlpatterns = [
     path("counters/", list_counters),
     path("tokens/", list_tokens),
 
-
-
 ]
+
+#  {
+#         "user_name": "string",
+#         "phone_number": "string",
+#         "queue": 1
+#     }
