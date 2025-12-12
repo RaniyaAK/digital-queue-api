@@ -1,6 +1,11 @@
 from django.urls import path
 from .views import (
-    create_queue, create_counter, join_queue, call_next, skip_token, complete_token, current_serving, my_token_status
+    create_queue, create_counter,
+    join_queue, 
+    call_next, skip_token, complete_token,
+    current_serving,
+    my_token_status,
+    list_counters,list_queues,list_tokens
 )
 
 urlpatterns = [
@@ -12,6 +17,10 @@ urlpatterns = [
     path("complete/<int:token_id>/", complete_token),
     path("serving/<int:queue_id>/", current_serving),
     path("my-token/<int:token_id>/", my_token_status),
+    path("queues/", list_queues),
+    path("counters/", list_counters),
+    path("tokens/", list_tokens),
+
 
 
 ]

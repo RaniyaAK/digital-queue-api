@@ -38,70 +38,136 @@ def assign_to_counter(token):
     return token
 
 # ---------------- API Endpoints ----------------
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import Queue
+from .serializers import QueueSerializer
 
 # Create Queue
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 def create_queue(request):
-    name = request.data.get("name")
-    avg_handle_time = request.data.get("avg_handle_time", 5)
+    if request.method == 'GET':
+        return Response({
+            "message": "Send the following fields using POST to create a queue.",
+            "required_fields": {
+                "name": "string (Queue Name)",
+                "avg_handle_time": "optional integer (Average handling time in minutes, default=5)"
+            }
+        })
 
-    if not name:
-        return Response({"error": "Queue name is required"}, status=400)
+    if request.method == 'POST':
+        name = request.data.get("name")
+        avg_handle_time = int(request.data.get("avg_handle_time", 5))
 
-    queue = Queue.objects.create(name=name, avg_handle_time=avg_handle_time)
-    return Response({"message": "Queue created", "queue": QueueSerializer(queue).data})
+        if not name:
+            return Response({"error": "Queue name is required"}, status=400)
+
+        queue = Queue.objects.create(name=name, avg_handle_time=avg_handle_time)
+
+        # Format avg_handle_time as minutes
+        queue_data = QueueSerializer(queue).data
+        queue_data['avg_handle_time'] = f"{queue.avg_handle_time} mins"
+
+        return Response({"message": "Queue created", "queue": queue_data}, status=201)
+    
 
 # Create Counter
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 def create_counter(request):
-    name = request.data.get("name")
-    queue_id = request.data.get("queue_id")
+    if request.method == 'GET':
+        return Response({
+            "message": "Send the following fields using POST to create a counter.",
+            "required_fields": {
+                "name": "string",
+                "queue_id": "integer (Queue ID)"
+            }
+        })
 
-    if not name or not queue_id:
-        return Response({"error": "Counter name and queue_id are required"}, status=400)
+    if request.method == 'POST':
+        name = request.data.get("name")
+        queue_id = request.data.get("queue_id")
 
-    try:
-        queue = Queue.objects.get(id=queue_id)
-    except Queue.DoesNotExist:
-        return Response({"error": "Queue not found"}, status=404)
+        if not name or not queue_id:
+            return Response({"error": "Counter name and queue_id are required"}, status=400)
 
-    counter = Counter.objects.create(name=name, queue=queue)
-    return Response({"message": "Counter created", "counter": CounterSerializer(counter).data})
+        try:
+            queue = Queue.objects.get(id=queue_id)
+        except Queue.DoesNotExist:
+            return Response({"error": "Queue not found"}, status=404)
 
-# Join Queue
-@api_view(['POST'])
+        counter = Counter.objects.create(name=name, queue=queue)
+        return Response({"message": "Counter created", "counter": CounterSerializer(counter).data})
+    
+    
+@api_view(['GET', 'POST'])
 def join_queue(request):
-    queue_id = request.data.get("queue_id")
-    priority = int(request.data.get("priority", 1))
-    user_name = request.data.get("user_name")
-    phone_number = request.data.get("phone_number")
+    if request.method == 'GET':
+        return Response({
+            "message": "Send the following fields using POST to join the queue.",
+            "required_fields": {
+                "user_name": "string",
+                "phone_number": "string",
+                "queue": "integer (Queue ID)",
+                "priority": "optional (1=normal, 2=high, 3=emergency)"
+            }
+        })
 
-    if not user_name:
-        return Response({"error": "user_name is required"}, status=400)
+    if request.method == 'POST':
+        queue_id = request.data.get("queue")
+        user_name = request.data.get("user_name")
+        phone_number = request.data.get("phone_number")
+        priority = int(request.data.get("priority", 1))
 
-    try:
-        queue = Queue.objects.get(id=queue_id)
-    except Queue.DoesNotExist:
-        return Response({"error": "Queue not found"}, status=404)
+        # --- Validate required fields ---
+        if not queue_id or not user_name or not phone_number:
+            return Response({"error": "queue, user_name and phone_number are required"}, status=400)
 
-    last_token = Token.objects.filter(queue=queue).order_by('-token_number').first()
-    next_number = last_token.token_number + 1 if last_token else 1
+        # --- Get queue ---
+        try:
+            queue = Queue.objects.get(id=queue_id)
+        except Queue.DoesNotExist:
+            return Response({"error": "Queue not found"}, status=404)
 
-    token = Token.objects.create(
-        queue=queue,
-        token_number=next_number,
-        priority=priority,
-        user_name=user_name,
-        phone_number=phone_number
-    )
+        # --- Generate next token number ---
+        last_token = Token.objects.filter(queue=queue).order_by('-token_number').first()
+        next_number = last_token.token_number + 1 if last_token else 1
 
-    wait_time = calculate_wait_time(queue, token)
+        # --- Create token ---
+        token = Token.objects.create(
+            queue=queue,
+            token_number=next_number,
+            user_name=user_name,
+            phone_number=phone_number,
+            priority=priority
+        )
 
-    return Response({
-        "message": "Token generated",
-        "token": TokenSerializer(token).data,
-        "estimated_wait_time_minutes": wait_time
-    })
+        # --- Calculate estimated wait time ---
+        people_ahead = Token.objects.filter(
+            queue=queue,
+            status="WAITING",
+            token_number__lt=token.token_number
+        ).count()
+        estimated_wait_time = people_ahead * queue.avg_handle_time
+        estimated_wait_time_str = f"{estimated_wait_time} mins" if estimated_wait_time > 1 else "1 min"
+
+        # --- Prepare response ---
+        data = TokenSerializer(token).data
+        data['estimated_wait_time'] = estimated_wait_time_str
+        data.pop('called_at', None)  # Remove called_at
+        data.pop('status', None)     # Remove status
+        data.pop('counter', None)    # Remove counter
+
+        return Response({
+            "message": "Token created successfully",
+            "token": data
+        }, status=201)
+
+
+        return Response({
+            "message": "Token created successfully",
+            "token": data
+        }, status=201)
+
 
 # Call Next
 @api_view(['POST'])
@@ -162,7 +228,6 @@ def current_serving(request, queue_id):
     serializer = TokenSerializer(serving_tokens, many=True)
     return Response(serializer.data)
 
-
 @api_view(['GET'])
 def my_token_status(request, token_id):
     try:
@@ -170,25 +235,66 @@ def my_token_status(request, token_id):
     except Token.DoesNotExist:
         return Response({"error": "Token not found"}, status=404)
 
-    # --- Count People Ahead ---
-    people_ahead = Token.objects.filter(
-        queue=token.queue,
-        status="WAITING",
-        token_number__lt=token.token_number
-    ).count()
+    # --- Base response ---
+    response = {
+        "id": token.id,
+        "token_number": token.token_number,
+        "created_at": token.created_at,
+        "user_name": token.user_name,
+        "phone_number": token.phone_number,
+        "queue": token.queue.id,
+        "priority": token.priority,
+        "status": token.status,
+        "avg_handle_time": f"{token.queue.avg_handle_time} mins"
+    }
 
-    # --- Count People Behind ---
-    people_behind = Token.objects.filter(
-        queue=token.queue,
-        status="WAITING",
-        token_number__gt=token.token_number
-    ).count()
+    # --- Only show wait info if token is WAITING ---
+    if token.status == "WAITING":
+        people_ahead = Token.objects.filter(
+            queue=token.queue,
+            status="WAITING",
+            token_number__lt=token.token_number
+        ).count()
 
-    data = TokenSerializer(token).data
-    data["people_ahead"] = people_ahead
-    data["people_behind"] = people_behind
+        people_behind = Token.objects.filter(
+            queue=token.queue,
+            status="WAITING",
+            token_number__gt=token.token_number
+        ).count()
 
-    return Response(data)
+        total_minutes = people_ahead * token.queue.avg_handle_time
+        if total_minutes == 0:
+            estimated_wait_time = "0 mins"
+        elif total_minutes == 1:
+            estimated_wait_time = "1 min"
+        else:
+            estimated_wait_time = f"{total_minutes} mins"
 
+        response.update({
+            "people_ahead": people_ahead,
+            "people_behind": people_behind,
+            "estimated_wait_time": estimated_wait_time
+        })
+    else:
+        # Show called_at only if token is SERVING or COMPLETED
+        response["called_at"] = token.called_at
 
+    return Response(response)
 
+@api_view(['GET'])
+def list_queues(request):
+    queues = Queue.objects.all()
+    serializer = QueueSerializer(queues, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+def list_counters(request):
+    counters = Counter.objects.all()
+    serializer = CounterSerializer(counters, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+def list_tokens(request):
+    tokens = Token.objects.all()
+    serializer = TokenSerializer(tokens, many=True)
+    return Response(serializer.data)
