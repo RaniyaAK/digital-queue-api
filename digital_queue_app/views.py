@@ -163,15 +163,17 @@ def join_queue(request):
         }, status=201)
 
 
-        return Response({
-            "message": "Token created successfully",
-            "token": data
-        }, status=201)
-
-
-# Call Next
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 def call_next(request):
+    if request.method == 'GET':
+        return Response({
+            "message": "Send the following JSON using POST to call the next token.",
+            "example_json": {
+                "queue_id": 1
+            }
+        })
+
+    # --- Existing POST logic ---
     queue_id = request.data.get("queue_id")
     try:
         queue = Queue.objects.get(id=queue_id)
@@ -191,6 +193,7 @@ def call_next(request):
         "token": TokenSerializer(assigned).data
     })
 
+
 # Skip Token
 @api_view(['POST'])
 def skip_token(request, token_id):
@@ -202,7 +205,6 @@ def skip_token(request, token_id):
     token.status = "SKIPPED"
     token.save()
     return Response({"message": "Token skipped"})
-
 # Complete Token
 @api_view(['POST'])
 def complete_token(request, token_id):
@@ -210,6 +212,10 @@ def complete_token(request, token_id):
         token = Token.objects.get(id=token_id)
     except Token.DoesNotExist:
         return Response({"error": "Token not found"}, status=404)
+
+    # ✅ Only SERVING tokens can be completed
+    if token.status != "SERVING":
+        return Response({"error": "Only SERVING tokens can be completed"}, status=400)
 
     counter = token.counter
     token.status = "COMPLETED"
@@ -222,11 +228,20 @@ def complete_token(request, token_id):
     return Response({"message": "Token completed"})
 
 
+
 @api_view(['GET'])
 def current_serving(request, queue_id):
     serving_tokens = Token.objects.filter(queue_id=queue_id, status="SERVING")
     serializer = TokenSerializer(serving_tokens, many=True)
-    return Response(serializer.data)
+    data = serializer.data
+
+    # Remove 'queue' and 'status' from each token
+    for token in data:
+        token.pop('queue', None)
+        token.pop('status', None)
+
+    return Response(data)
+
 
 @api_view(['GET'])
 def my_token_status(request, token_id):
