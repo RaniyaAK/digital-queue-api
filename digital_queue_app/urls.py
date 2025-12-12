@@ -14,7 +14,7 @@ urlpatterns = [
     path("join/", join_queue),
     path("next/", call_next),
     path("skip/<int:token_id>/", skip_token),
-    path("complete/<int:token_id>/", complete_token),
+    path('complete/<int:queue_id>/', complete_token),
     path("serving/<int:queue_id>/", current_serving),
     path("my-token/<int:token_id>/", my_token_status),
     path("queues/", list_queues),

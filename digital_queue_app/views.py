@@ -205,19 +205,18 @@ def skip_token(request, token_id):
     token.status = "SKIPPED"
     token.save()
     return Response({"message": "Token skipped"})
-# Complete Token
-@api_view(['POST'])
-def complete_token(request, token_id):
-    try:
-        token = Token.objects.get(id=token_id)
-    except Token.DoesNotExist:
-        return Response({"error": "Token not found"}, status=404)
 
-    # ✅ Only SERVING tokens can be completed
-    if token.status != "SERVING":
-        return Response({"error": "Only SERVING tokens can be completed"}, status=400)
+# Complete Token (using queue_id instead of token_id)
+@api_view(['POST'])
+def complete_token(request, queue_id):
+    # Find the token currently being served in this queue
+    token = Token.objects.filter(queue_id=queue_id, status="SERVING").first()
+
+    if not token:
+        return Response({"error": "No SERVING token found in this queue"}, status=404)
 
     counter = token.counter
+
     token.status = "COMPLETED"
     token.save()
 
@@ -225,8 +224,7 @@ def complete_token(request, token_id):
         counter.is_busy = False
         counter.save()
 
-    return Response({"message": "Token completed"})
-
+    return Response({"message": "Token completed", "token_id": token.id})
 
 
 @api_view(['GET'])
