@@ -14,8 +14,8 @@ from rest_framework import serializers
 from .models import Token, Queue
 
 class TokenSerializer(serializers.ModelSerializer):
-    token_number = serializers.IntegerField(read_only=True)  # auto-generated
-    queue = serializers.PrimaryKeyRelatedField(queryset=Queue.objects.all())  # accept queue ID
+    token_number = serializers.IntegerField(read_only=True) 
+    queue = serializers.PrimaryKeyRelatedField(queryset=Queue.objects.all())
 
     class Meta:
         model = Token

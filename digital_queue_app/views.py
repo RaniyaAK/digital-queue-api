@@ -1,9 +1,8 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.utils import timezone
 from .models import Queue, Counter, Token
 from .serializers import QueueSerializer, CounterSerializer, TokenSerializer
-from .serializers import TokenSerializer
+from django.utils import timezone
 
 
 # ---------------- Helpers ----------------
@@ -16,7 +15,7 @@ def calculate_wait_time(queue, token):
     return before_count * queue.avg_handle_time
 
 def get_next_token(queue):
-    for p in [3,2,1]:  # emergency -> senior -> normal
+    for p in [3,2,1]:  
         token = Token.objects.filter(queue=queue, status="WAITING", priority=p).order_by('token_number').first()
         if token:
             return token
@@ -37,11 +36,6 @@ def assign_to_counter(token):
 
     return token
 
-# ---------------- API Endpoints ----------------
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from .models import Queue
-from .serializers import QueueSerializer
 
 # Create Queue
 @api_view(['GET', 'POST'])
@@ -64,7 +58,6 @@ def create_queue(request):
 
         queue = Queue.objects.create(name=name, avg_handle_time=avg_handle_time)
 
-        # Format avg_handle_time as minutes
         queue_data = QueueSerializer(queue).data
         queue_data['avg_handle_time'] = f"{queue.avg_handle_time} mins"
 
@@ -118,17 +111,14 @@ def join_queue(request):
         phone_number = request.data.get("phone_number")
         priority = int(request.data.get("priority", 1))
 
-        # --- Validate required fields ---
         if not queue_id or not user_name or not phone_number:
             return Response({"error": "queue, user_name and phone_number are required"}, status=400)
 
-        # --- Get queue ---
         try:
             queue = Queue.objects.get(id=queue_id)
         except Queue.DoesNotExist:
             return Response({"error": "Queue not found"}, status=404)
 
-        # --- Generate next token number ---
         last_token = Token.objects.filter(queue=queue).order_by('-token_number').first()
         next_number = last_token.token_number + 1 if last_token else 1
 
@@ -141,7 +131,6 @@ def join_queue(request):
             priority=priority
         )
 
-        # --- Calculate estimated wait time ---
         people_ahead = Token.objects.filter(
             queue=queue,
             status="WAITING",
@@ -150,12 +139,11 @@ def join_queue(request):
         estimated_wait_time = people_ahead * queue.avg_handle_time
         estimated_wait_time_str = f"{estimated_wait_time} mins" if estimated_wait_time > 1 else "1 min"
 
-        # --- Prepare response ---
         data = TokenSerializer(token).data
         data['estimated_wait_time'] = estimated_wait_time_str
-        data.pop('called_at', None)  # Remove called_at
-        data.pop('status', None)     # Remove status
-        data.pop('counter', None)    # Remove counter
+        data.pop('called_at', None)  
+        data.pop('status', None)    
+        data.pop('counter', None)    
 
         return Response({
             "message": "Token created successfully",
@@ -173,7 +161,6 @@ def call_next(request):
             }
         })
 
-    # --- Existing POST logic ---
     queue_id = request.data.get("queue_id")
     try:
         queue = Queue.objects.get(id=queue_id)
@@ -204,7 +191,6 @@ def skip_token(request, token_id):
     token.status = "SKIPPED"
     token.save()
 
-    # Serialize and hide status
     token_data = TokenSerializer(token).data
     token_data.pop('status', None)
     token_data.pop('called_at', None)
@@ -246,7 +232,6 @@ def current_serving(request, queue_id):
     serializer = TokenSerializer(serving_tokens, many=True)
     data = serializer.data
 
-    # Remove 'queue' and 'status' from each token
     for token in data:
         token.pop('queue', None)
         token.pop('status', None)
@@ -261,7 +246,6 @@ def my_token_status(request, token_id):
     except Token.DoesNotExist:
         return Response({"error": "Token not found"}, status=404)
 
-    # --- Base response ---
     response = {
         "id": token.id,
         "token_number": token.token_number,
@@ -274,7 +258,6 @@ def my_token_status(request, token_id):
         "avg_handle_time": f"{token.queue.avg_handle_time} mins"
     }
 
-    # --- Only show wait info if token is WAITING ---
     if token.status == "WAITING":
         people_ahead = Token.objects.filter(
             queue=token.queue,
@@ -302,7 +285,6 @@ def my_token_status(request, token_id):
             "estimated_wait_time": estimated_wait_time
         })
     else:
-        # Show called_at only if token is SERVING or COMPLETED
         response["called_at"] = token.called_at
 
     return Response(response)

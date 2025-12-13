@@ -3,7 +3,7 @@ from django.utils import timezone
 
 class Queue(models.Model):
     name = models.CharField(max_length=100)
-    avg_handle_time = models.IntegerField(default=5)  # in minutes
+    avg_handle_time = models.IntegerField(default=5) 
 
     def __str__(self):
         return self.name
@@ -28,13 +28,12 @@ class Token(models.Model):
 
     queue = models.ForeignKey(Queue, on_delete=models.CASCADE)
     token_number = models.IntegerField()
-    priority = models.IntegerField(default=1)  # 1-normal, 2-senior, 3-emergency
+    priority = models.IntegerField(default=1) 
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='WAITING')
     counter = models.ForeignKey(Counter, null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(default=timezone.now)
     called_at = models.DateTimeField(null=True, blank=True)
 
-    # User info (both required)
     user_name = models.CharField(max_length=100, default="Anonymous")
     phone_number = models.CharField(max_length=15, default="0000000000")
 

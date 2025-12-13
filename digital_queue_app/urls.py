@@ -23,8 +23,3 @@ urlpatterns = [
 
 ]
 
-#  {
-#         "user_name": "string",
-#         "phone_number": "string",
-#         "queue": 1
-#     }
