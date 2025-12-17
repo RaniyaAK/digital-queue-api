@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Queue, Counter, Token
 
+
 class QueueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Queue
@@ -10,8 +11,7 @@ class CounterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Counter
         fields = "__all__"
-from rest_framework import serializers
-from .models import Token, Queue
+
 
 class TokenSerializer(serializers.ModelSerializer):
     token_number = serializers.IntegerField(read_only=True) 
